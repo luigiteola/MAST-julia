@@ -154,7 +154,7 @@ end
  const Data_Solar_DIR = joinpath(@__DIR__, config["solar_directory"])
  const Data_Wind_DIR = joinpath(@__DIR__, config["wind_directory"])
  const ModelFile = config["model_file"]
- const network_model = config["network_model"] # Network model detail - Cu_plate, Nodel or Regional
+ const network_model = config["network_model"] # Network model detail - Cu_plate, Nodal or Regional
 
  # Identification of different generator types
  const BlCoal_Tech = Set(["BlCT", "Coal", "Black Coal", "Sub Critical"])
@@ -166,7 +166,7 @@ end
 
  # Identification of network detail options
  const Cu_plate = Set(["Cu_plate", "Cu Plate" ,"Copper Plate", "Copperplate", "Copper plate", "Single-bus", "Single Bus"])
- const Nodel = Set(["Nodel", "Node", "Full Network", "Whole Network", "Full"])
+ const Nodal = Set(["Nodal", "Node", "Full Network", "Whole Network", "Full"])
  const Regional = Set(["Regional", "Region", "Zonal", "Zone"])
 
  # Trace date selection
