@@ -14,7 +14,7 @@
     "rolling_horizon_days": 3,
     "overlap_days": 1
   },
-  "network_model": "Copper plate",
+  "network_model": "Nodal",
   "loss_factor": 0.1,
   "reserve_margin": 0.1,
   "solver_name": "Gurobi",
