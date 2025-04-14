@@ -1,0 +1,22 @@
+{
+  "data_directory": "models",
+  "model_file": "test.xlsx",
+  "demand_directory": "ESOO_2013_Load_Traces",
+  "solar_directory": "Solar_Trace",
+  "wind_directory": "0910_Wind_Traces",
+  "trace": {
+    "year": 2020,
+    "month": 7,
+    "day": 1
+  },
+  "planning": {
+    "horizon_days": 7,
+    "rolling_horizon_days": 3,
+    "overlap_days": 1
+  },
+  "network_model": "Copper plate",
+  "loss_factor": 0.1,
+  "reserve_margin": 0.1,
+  "solver_name": "Gurobi",
+  "mipgap": 0.01
+}
