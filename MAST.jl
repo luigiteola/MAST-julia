@@ -416,9 +416,13 @@ function main()
 
 
                 # Utility Scale Battery Constraints
+                @constraint(model, [s in UStorage], SOC[s, t_start] == prev_SOC[s])
+                if T_sub > 1
+                    @constraint(model, [s in UStorage, t in subhorizon[2:end]], SOC[s, t] == SOC[s, t-1] + Charging_eff[s] * P_chrg[s, t-1] - P_dischrg[s, t-1] / Discharging_eff[s])
+                end
+                
                 @constraint(model, [s in UStorage, t in subhorizon], P_chrg[s, t] <= Utility_storage_data_dic[s]["Maximum_Charge_Rate_MWh"] * U_bin[s, t])
                 @constraint(model, [s in UStorage, t in subhorizon], P_dischrg[s, t] <= Utility_storage_data_dic[s]["Maximum_Discharge_Rate_MWh"] * (1 - U_bin[s, t]))
-                @constraint(model, [s in UStorage, t in t_start:t_end-1], SOC[s, t+1] == SOC[s, t] + Charging_eff[s] * P_chrg[s, t] - P_dischrg[s, t] / Discharging_eff[s])
                 @constraint(model, [s in UStorage, t in subhorizon], Utility_storage_data_dic[s]["Minimum_Storage_Capacity_MWh"] <= SOC[s, t] <= Utility_storage_data_dic[s]["Maximum_Storage_Capacity_MWh"])
 
                 # Power balance constraint
