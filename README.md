@@ -2,7 +2,8 @@ This is a Market Simulation Tool (MAST) coded in the Julia Programming Language.
 See MAST_Julia_guide_v1.0.pdf for installation and initialization instructions.
 
 
-Added functionality for v1.4
+Added functionality for v1.4:
+
 1. MAST_debug.jl - new file for debugging purposes. Same as MAST.jl but without the command line prompts. Open the file and run/execute using your IDE.
 2. Improved handling of output CSV file - instead of a single column, now outputs a table of decision variables at each time step.
 3. New Demand, Solar, and Wind traces added - 'Demand/Solar/Wind Traces Hourly Resolution' Folders
@@ -13,7 +14,10 @@ Added functionality for v1.4
 8. Bug fixes in storage initialization
 
 
-Added functionality for v1.3
+
+
+Added functionality for v1.3:
+
 Network model detail
 Determine network model detail in config.json
 1. Copper plate - single bus model
