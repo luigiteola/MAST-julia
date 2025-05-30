@@ -14,13 +14,13 @@ Added functionality for v1.4
 
 
 Added functionality for v1.3
-A. Network model detail
+Network model detail
 Determine network model detail in config.json
 1. Copper plate - single bus model
 2. Regional - buses grouped per region
 3. Nodal (default) - all buses and branches considered
 
-B. Allowed values for "network_model"
+Allowed values for "network_model"
  1. Copper plate = "Cu_plate", "Cu Plate" ,"Copper Plate", "Copperplate", "Copper plate", "Single-bus", "Single Bus"
  2. Regional = "Regional", "Region", "Zonal", "Zone"
  3. Nodal = "Nodal", "Node", "Full Network", "Whole Network", "Full"
