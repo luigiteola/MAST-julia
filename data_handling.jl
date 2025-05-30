@@ -217,6 +217,34 @@ for value in UGen
 end
 
 # Generator type 1 to region links
+GenT1_Bus_links = Set()
+GenT1_Region_links = Set()
+for value in UGen
+    Generation_type = Generator_data_dic[value]["Generation_Type"]
+    if Generation_type == 1
+        Location_bus = Generator_data_dic[value]["Location_Bus"]
+        Bus_region = Bus_data_dic[Location_bus]["Bus_Region"]
+        # println("Type 1 Generator ", value, " is in Region ", Bus_region)
+        push!(GenT1_Bus_links, (value, Location_bus))
+        push!(GenT1_Region_links, (value, Bus_region))
+    end
+end
+
+# Generator type 2 to region links
+GenT2_Bus_links = Set()
+GenT2_Region_links = Set()
+for value in UGen
+    Generation_type = Generator_data_dic[value]["Generation_Type"]
+    if Generation_type == 2
+        Location_bus = Generator_data_dic[value]["Location_Bus"]
+        Bus_region = Bus_data_dic[Location_bus]["Bus_Region"]
+        # println("Type 2 Generator ", value, " is in Region ", Bus_region)
+        push!(GenT2_Bus_links, (value, Location_bus))
+        push!(GenT2_Region_links, (value, Bus_region))
+    end
+end
+
+# Generator type 1 to region links
 GenT1_Region_links = Set()
 for value in UGen
     Generation_type = Generator_data_dic[value]["Generation_Type"]

@@ -1,12 +1,12 @@
 #  Copyright Notice
-#  Copyright ©2025. Luigi Teola, Mohsen Aldaadi, Muhammad Adnan, and Gregor Verbič. Based on previous work done in MATLAB and AMPL by Shariq Riaz, Archie Chapman, and Gregor Verbič (2017) . All Rights Reserved.
+#  Copyright ©2025. Luigi Teola, Mohsen Aldaadi, Muhammad Adnan, and Gregor Verbič. Based on previous work done in MATLAB and AMPL by Shariq Riaz, Archie Chapman, and Gregor Verbič (2017). All Rights Reserved.
 
 #  Permission to use, copy, modify, and distribute this software and 
 #  its documentation for educational, research, and not-for-profit purposes,
 #  without fee and without a signed licensing agreement, is hereby granted,
 #  provided that the above copyright notice, this paragraph and the following
 #  two paragraphs appear in all copies, modifications, and distributions.
-#  Contact: Gregor Verbic, School of Electrical and Information Engineering
+#  Contact: Gregor Verbic, School of Electrical and Computer Engineering
 #  Centre for Future Energy Networks, J03 - Electrical Engineering Building,
 #  The University of Sydney, Ph +61 2 9351 8136,
 #  gregor.verbic@sydney.edu.au.
@@ -83,20 +83,19 @@ function load_config(config_path::String)
             "solar_directory" => "Solar_Trace",
             "wind_directory" => "0910_Wind_Traces",
             "trace" => Dict("year" => 2020, "month" => 7, "day" => 1),
-            "planning" => Dict("horizon_days" => 3, "rolling_horizon_days" => 2, "overlap_days" => 1),
+            "planning" => Dict("horizon_days" => 3, "rolling_horizon_days" => 2, "overlap_days" => 1, "voll" => 10000, "curtailment_penalty" => 10000),
             "network_model" => "Nodal",
             "loss_factor" => 0.1,
             "reserve_margin" => 0.1,
             "solver_name" => "Gurobi",
-            "mipgap" => 0.01
+            "mipgap" => 0.01,
+            "plot_horizon_days": 3
         )
     end
 end
 
-
-# Function to store all subhorizon variables in a DataFrame
 function store_subhorizon_variables(model::JuMP.Model, sub::Int, subhorizon, abs_subhorizon)
-    df = DataFrame(Subhorizon=Int[], Time=Int[], VariableName=String[], Index=String[], Value=Float64[])
+    df = DataFrame(Subhorizon=Int[], Time=Int[], VariableName=String[], Index=String[], Value=Float64[], VarIndex=String[])
     vars = all_variables(model)
     
     for var in vars
@@ -117,13 +116,15 @@ function store_subhorizon_variables(model::JuMP.Model, sub::Int, subhorizon, abs
                 # Only store if t_global is within the abstracted subhorizon
                 if t_global in abs_subhorizon
                     val = value(var)
-                    push!(df, (Subhorizon=sub, Time=t_global, VariableName=base_name, Index=id, Value=val))
+                    var_index = string(base_name, "_", id)  # e.g., "S_Up_var_G1"
+                    push!(df, (Subhorizon=sub, Time=t_global, VariableName=base_name, Index=id, Value=val, VarIndex=var_index))
                 end
             elseif length(indices) == 1
                 val = value(var)
                 # Only store scalar variables (e.g., Build_line) in the first subhorizon
                 if sub == 1
-                    push!(df, (Subhorizon=sub, Time=0, VariableName=base_name, Index=index_str, Value=val))
+                    var_index = string(base_name, "_", index_str)
+                    push!(df, (Subhorizon=sub, Time=0, VariableName=base_name, Index=index_str, Value=val, VarIndex=var_index))
                 end
             end
         else
@@ -132,11 +133,23 @@ function store_subhorizon_variables(model::JuMP.Model, sub::Int, subhorizon, abs
     end
 
     obj_value = objective_value(model)
-    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Objective", Index="Subhorizon_$sub", Value=obj_value))
+    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Objective", Index="Subhorizon_$sub", Value=obj_value, VarIndex="Objective_Subhorizon_$sub"))
+
+    fixed_cost = sum(Generator_data_dic[g]["Fix_Cost"] * value(model[:Status_var][g, t]) for g in UGen for t in abs_subhorizon)
+    startup_cost = sum(Generator_data_dic[g]["Start_up_Cost"] * value(model[:S_Up_var][g, t]) for g in UGen for t in abs_subhorizon)
+    shutdown_cost = sum(Generator_data_dic[g]["Shut_down_Cost"] * value(model[:S_Down_var][g, t]) for g in UGen for t in abs_subhorizon)
+    variable_cost = sum(Generator_data_dic[g]["Variable_Cost"] * value(model[:Pwr_Gen_var][g, t]) for g in UGen for t in abs_subhorizon)
+    unserved_demand_cost = sum(value(model[:unserved_demand][n, t]) * voll for n in UBus for t in abs_subhorizon)
+
+    # Store cost components
+    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Fixed_Cost", Index="Subhorizon_$sub", Value=fixed_cost, VarIndex="Fixed_Cost_Subhorizon_$sub"))
+    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Startup_Cost", Index="Subhorizon_$sub", Value=startup_cost, VarIndex="Startup_Cost_Subhorizon_$sub"))
+    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Shutdown_Cost", Index="Subhorizon_$sub", Value=shutdown_cost, VarIndex="Shutdown_Cost_Subhorizon_$sub"))
+    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Variable_Cost", Index="Subhorizon_$sub", Value=variable_cost, VarIndex="Variable_Cost_Subhorizon_$sub"))
+    push!(df, (Subhorizon=sub, Time=first(abs_subhorizon), VariableName="Unserved_Demand_Cost", Index="Subhorizon_$sub", Value=unserved_demand_cost, VarIndex="Unserved_Demand_Cost_Subhorizon_$sub"))
     
     return df
 end
-
 
 #-------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -159,7 +172,7 @@ end
  # Identification of different generator types
  const BlCoal_Tech = Set(["BlCT", "Coal", "Black Coal", "Sub Critical"])
  const BrCoal_Tech = Set(["BrCT", "Brown Coal"])
- const Hydro_Tech = Set(["HYD", "Hydro", "Water", "Hydro RoR", "Hydropower", "Hydroelectric", "Run-of-River", "Large Hydro", "Small Hydro", "Pumped Hydro", "Dam-type Hydro"])
+ const Hydro_Tech = Set(["HYD", "HYDR", "Hydro", "Water", "Hydro RoR", "Hydropower", "Hydroelectric", "Run-of-River", "Large Hydro", "Small Hydro", "Pumped Hydro", "Dam-type Hydro"])
  const Gas_Tech = Set(["OCGT", "CCGT", "Gas", "Natural Gas", "NatGas", "Cogen", "NG", "CHP", "Gas Turbine", "Gas Engine", "GT"])
  const Solar_Tech = Set(["PV", "Solar", "SOLR", "Solar PV", "CST", "CSP", "Utility Solar", "Solar Thermal", "Photovoltaic"])
  const Wind_Tech = Set(["WND", "Wind", "Onshore Wind", "Offshore Wind", "Wind Turbine"])
@@ -184,6 +197,12 @@ end
  const abs_step_days = H - overlap_days  # Effective step size in days after accounting for overlap
  const abs_step_hours = abs_step_days * hours_per_day  # Effective step size in hours
  const N_subhorizons = ceil(Int, D / (H - overlap_days))  # Adjusted number of subhorizons
+ const voll = config["planning"]["voll"] # Value of lost load (VOLL) in $/MWh for unserved demand
+ const curtailment_penalty = config["planning"]["curtailment_penalty"] # Cost of curtailment in $/MWh
+
+ # Plotting parameters
+ const plot_horizon_days = config["plot_horizon_days"] # Days for plotting
+ const T_plot = plot_horizon_days * hours_per_day  # Total hours for plotting
  
  # Additional parameters
  const Loss_factor = config["loss_factor"]
@@ -199,8 +218,21 @@ end
  global solver_iterations = 0   # Total simplex/barrier iterations
  global total_cost = 0.0        # Total cost of the optimization
 
- # Results storage (for post-processing)
- results = Dict("Status_var" => [],
+  # Results metrics
+  global total_cost = 0.0        # Total cost of the optimization
+  global gen_capacity = 0.0
+  global total_unserved_demand = 0.0 # Total unserved demand
+  global total_unserved_demand_cost = 0.0
+  global total_fixed_cost = 0.0
+  global total_startup_cost = 0.0
+  global total_shutdown_cost = 0.0
+  global total_variable_cost = 0.0
+  global total_curtailment = 0.0
+  global total_curtailment_cost = 0.0
+
+
+  # Results storage (for post-processing)
+  results = Dict("Status_var" => [],
                 "S_Up_var" => [],
                 "S_Down_var" => [],
                 "Pwr_Gen_var" => [], 
@@ -208,18 +240,27 @@ end
                 "P_chrg" => [], 
                 "P_dischrg" => [], 
                 "U_bin" => [], 
-                # "psm_batt_egy" => [], 
-                # "psm_grid_pwr" => [], 
-                # "psm_feedin_pwr" => [], 
-                # "psm_battc_pwr" => [], 
-                # "psm_battd_pwr" => [], 
-                # "psm_batt_bin" => [], 
-                # "psm_feedin_priceratio" => [],
+                "psm_batt_egy" => [], 
+                "psm_grid_pwr" => [], 
+                "psm_feedin_pwr" => [], 
+                "psm_battc_pwr" => [], 
+                "psm_battd_pwr" => [], 
+                "psm_batt_bin" => [],
+                "psm_pv_pwr" => [], 
+                "psm_pv_spill" => [],  
+                "psm_feedin_priceratio" => [],
                 "Pwr_line_var" => [],
                 "Angle_bus_var" => [],
- )
+                "unserved_demand" => [],
+                "Fixed_Cost" => [],
+                "Startup_Cost" => [],
+                "Shutdown_Cost" => [],
+                "Variable_Cost" => [],
+                "Pwr_curtailed" => [],
+                "Curtailment_Cost" => [],
+)
  
- const RESULTS_DIR = joinpath(@__DIR__, "results")
+const RESULTS_DIR = joinpath(@__DIR__, "results")
 
 function main()
 
@@ -236,9 +277,9 @@ function main()
    
 
     # DataFrame to collect all variables across subhorizons
-    all_vars_df = DataFrame(Subhorizon=Int[], Time=Int[], VariableName=String[], Index=String[], Value=Float64[])
+    all_vars_df = DataFrame(Time=Int[])
+    pivoted_all_vars_df = DataFrame(Time=Int[])
     
-
     #-------------------------------------------------------------------------------------------------------------------------------------------
 
     # Rolling horizon optimization loop
@@ -279,6 +320,8 @@ function main()
 
                 set_silent(model)
 
+                M0 = 1e6 # Large constant
+
                 # Generator decision variables
                 @variable(model, S_Up_var[UGen, subhorizon] >= 0, Int)
                 @variable(model, 0 <= Status_var[g in UGen, t in subhorizon] <= Generator_data_dic[g]["Number_Units"], Int)
@@ -294,6 +337,12 @@ function main()
                 @variable(model, P_dischrg[s in UStorage, t in subhorizon] >= 0)
                 @variable(model, SOC[s in UStorage, t in subhorizon])
                 @variable(model, U_bin[s in UStorage, t in subhorizon], Bin)
+
+                # Other decision variables
+                @variable(model, unserved_demand[UBus, subhorizon] >= 0) # Unserved demand for each bus in the subhorizon
+                @variable(model, Pwr_curtailed[g in GenT2, t in subhorizon] >= 0) # Power curtailed for each Type 2 generator in the subhorizon
+                @constraint(model, [n in UBus, t in subhorizon], unserved_demand[n, t] <= csmDemand[n, t]) # Unserved demand constraint
+                @constraint(model, [s in UStorage, t in subhorizon], sum(unserved_demand[n, t] for n in UBus) <= M0 * (1 - U_bin[s, t])) # Unserved demand constraint for storage
 
                 # Constraints
 
@@ -382,7 +431,7 @@ function main()
                 end
 
                 # Resource availability constraint for Type 2 generators (Wind and Solar)
-                @constraint(model,u_Resource_availability_T2[g in GenT2, t in subhorizon], Pwr_Gen_var[g, t] <= Status_var[g, t] * Resource_trace_T2[(g, t)])
+                @constraint(model,u_Resource_availability_T2[g in GenT2, t in subhorizon], Pwr_Gen_var[g, t] + Pwr_curtailed[g, t] == Status_var[g, t] * Resource_trace_T2[(g, t)])
                 @constraint(model,u_G_T2_min_pwr[g in GenT2, t in subhorizon], Status_var[g, t] * Generator_data_dic[g]["Minimum_Real_Power"] <= Pwr_Gen_var[g, t])
 
                 # Transmission constraints
@@ -416,23 +465,23 @@ function main()
 
 
                 # Utility Scale Battery Constraints
-                @constraint(model, [s in UStorage], SOC[s, t_start] == prev_SOC[s])
+                @constraint(model, [s in UStorage], SOC[s, t_start] == prev_SOC[s] + Charging_eff[s] * P_chrg[s, t_start] - P_dischrg[s, t_start] / Discharging_eff[s])
                 if T_sub > 1
-                    @constraint(model, [s in UStorage, t in subhorizon[2:end]], SOC[s, t] == SOC[s, t-1] + Charging_eff[s] * P_chrg[s, t-1] - P_dischrg[s, t-1] / Discharging_eff[s])
+                    @constraint(model, [s in UStorage, t in subhorizon[2:end]], SOC[s, t] == SOC[s, t-1] + Charging_eff[s] * P_chrg[s, t] - P_dischrg[s, t] / Discharging_eff[s])
                 end
                 
                 @constraint(model, [s in UStorage, t in subhorizon], P_chrg[s, t] <= Utility_storage_data_dic[s]["Maximum_Charge_Rate_MWh"] * U_bin[s, t])
                 @constraint(model, [s in UStorage, t in subhorizon], P_dischrg[s, t] <= Utility_storage_data_dic[s]["Maximum_Discharge_Rate_MWh"] * (1 - U_bin[s, t]))
                 @constraint(model, [s in UStorage, t in subhorizon], Utility_storage_data_dic[s]["Minimum_Storage_Capacity_MWh"] <= SOC[s, t] <= Utility_storage_data_dic[s]["Maximum_Storage_Capacity_MWh"])
 
-                # Power balance constraint
                 @constraint(model, u_Balance[n in UBus, t in subhorizon],
-                    sum(Pwr_Gen_var[g, t] for (g, nb) in Gen_Bus_links if nb == n) +
+                    sum(Pwr_Gen_var[g, t] for (g, nb) in GenT1_Bus_links if nb == n) +
+                    sum(Pwr_Gen_var[g, t] - Pwr_curtailed[g, t] for (g, nb) in GenT2_Bus_links if nb == n) +
                     sum(Pwr_line_var[l2, t] for (l2, nb) in Line_end2_Bus_links if nb == n) +
                     sum(P_dischrg[s, t] for (s, nb) in Storage_Bus_links if nb == n) +
-                    sum(Rooftop_solar_trace_DR[n,t])
+                    (unserved_demand[n,t] * (1 + Loss_factor))
                     ==
-                    csmDemand[n,t] + psmDemand[n,t] + Loss_factor * csmDemand[n,t] +
+                    csmDemand[n,t] * (1 + Loss_factor) +
                     sum(Pwr_line_var[l1, t] for (l1, nb) in Line_end1_Bus_links if nb == n) +
                     sum(P_chrg[s, t] for (s, nb) in Storage_Bus_links if nb == n)
                 )
@@ -442,11 +491,14 @@ function main()
                 # Objecive Function
                 @objective(model, Min,
                     sum(sum(
-                        (Generator_data_dic[g]["Fix_Cost"]) * Status_var[g, t] +
-                        (Generator_data_dic[g]["Start_up_Cost"]) * S_Up_var[g, t] +
-                        (Generator_data_dic[g]["Shut_down_Cost"]) * S_Down_var[g, t] +
-                        (Generator_data_dic[g]["Variable_Cost"]) * Pwr_Gen_var[g, t]
-                        for g in UGen) for t in subhorizon)
+                            (Generator_data_dic[g]["Fix_Cost"]) * Status_var[g, t] +
+                            (Generator_data_dic[g]["Start_up_Cost"]) * S_Up_var[g, t] +
+                            (Generator_data_dic[g]["Shut_down_Cost"]) * S_Down_var[g, t] +
+                            (Generator_data_dic[g]["Variable_Cost"]) * Pwr_Gen_var[g, t] +
+                            (g in GenT2 ? curtailment_penalty * Pwr_curtailed[g, t] : 0)
+                            for g in UGen) +
+                            voll * sum(unserved_demand[n, t] for n in UBus) 
+                        for t in subhorizon)
                 )
 
                 #-------------------------------------------------------------------------------------------------------------------------------------------
@@ -466,24 +518,94 @@ function main()
                     total_hours = length(subhorizon)
                     cost_scaling_factor = non_overlap_hours / total_hours
                     subhorizon_cost = objective_value(model) * cost_scaling_factor
+                    
+                    unserved_demand_sub = sum((value(unserved_demand[n, t]) for n in UBus for t in abs_subhorizon), init=0.0)
+                    curtailment_sub = sum((value(Pwr_curtailed[g, t]) for g in GenT2 for t in abs_subhorizon), init=0.0)
+
                     global total_cost += subhorizon_cost
-                    println("\nSub-horizon $sub (Hours $t_start to $t_end) optimized.\nOptimal Cost = \$ $(round(subhorizon_cost, digits=2))")   
+                    global gen_capacity = sum(Generator_data_dic[g]["Maximum_Real_Power"] * Generator_data_dic[g]["Number_Units"] for g in UGen)
+                    global total_unserved_demand += unserved_demand_sub
+                    global total_curtailment += curtailment_sub
+
+                    fixed_cost_sub = sum(Generator_data_dic[g]["Fix_Cost"] * value(Status_var[g, t]) for g in UGen for t in abs_subhorizon) * cost_scaling_factor
+                    startup_cost_sub = sum(Generator_data_dic[g]["Start_up_Cost"] * value(S_Up_var[g, t]) for g in UGen for t in abs_subhorizon) * cost_scaling_factor
+                    shutdown_cost_sub = sum(Generator_data_dic[g]["Shut_down_Cost"] * value(S_Down_var[g, t]) for g in UGen for t in abs_subhorizon) * cost_scaling_factor
+                    variable_cost_sub = sum(Generator_data_dic[g]["Variable_Cost"] * value(Pwr_Gen_var[g, t]) for g in UGen for t in abs_subhorizon) * cost_scaling_factor
+                    unserved_demand_cost_sub = sum((value(unserved_demand[n, t]) * voll for n in UBus for t in abs_subhorizon),init=0.0) * cost_scaling_factor
+                    curtailment_cost_sub = sum((value(Pwr_curtailed[g, t]) * curtailment_penalty for g in GenT2 for t in abs_subhorizon),init=0.0) * cost_scaling_factor
+
+                    global total_fixed_cost += fixed_cost_sub
+                    global total_startup_cost += startup_cost_sub
+                    global total_shutdown_cost += shutdown_cost_sub
+                    global total_variable_cost += variable_cost_sub
+                    global total_unserved_demand_cost += unserved_demand_cost_sub
+                    global total_curtailment_cost +=  curtailment_cost_sub
+
+                    println("Sub-horizon $sub (Hours $abs_t_start to $abs_t_end) optimized.")
+                    println("   Optimal Cost (\$) =  $(round(subhorizon_cost, digits=0))")
+                    println("   Installed Capacity (MW) = $(round(gen_capacity, digits=0 ))")
+                    println("   Dispatched Generation (MWh) = $(round(sum(value(Pwr_Gen_var[g, t]) for g in UGen for t in abs_subhorizon), digits=0))")
+                    println("   Unserved Demand (MWh) = $(round(unserved_demand_sub, digits=0))")  
+                    println("   Curtailment (MWh) = $(round(curtailment_sub, digits=0))")
 
                     # Store results
                     push!(results["Status_var"], Dict(g => [value(Status_var[g, t]) for t in abs_subhorizon] for g in UGen))
-                    push!(results["Pwr_Gen_var"], Dict(g => [value(Pwr_Gen_var[g, t]) for t in abs_subhorizon] for g in UGen))
                     push!(results["S_Up_var"], Dict(g => [value(S_Up_var[g, t]) for t in abs_subhorizon] for g in UGen))
                     push!(results["S_Down_var"], Dict(g => [value(S_Down_var[g, t]) for t in abs_subhorizon] for g in UGen))
+                    push!(results["Pwr_Gen_var"], Dict(g => [value(Pwr_Gen_var[g, t]) for t in abs_subhorizon] for g in UGen))
                     push!(results["P_chrg"], Dict(s => [value(P_chrg[s, t]) for t in abs_subhorizon] for s in UStorage))
                     push!(results["P_dischrg"], Dict(s => [value(P_dischrg[s, t]) for t in abs_subhorizon] for s in UStorage))
                     push!(results["SOC"], Dict(s => [value(SOC[s, t]) for t in abs_subhorizon] for s in UStorage))
                     push!(results["U_bin"], Dict(s => [value(U_bin[s, t]) for t in abs_subhorizon] for s in UStorage))
+                    push!(results["Pwr_curtailed"], Dict(g => [value(Pwr_curtailed[g, t]) for t in abs_subhorizon] for g in GenT2))
                     push!(results["Pwr_line_var"], Dict(l => [value(Pwr_line_var[l, t]) for t in abs_subhorizon] for l in ULine))
                     push!(results["Angle_bus_var"], Dict(n => [value(Angle_bus_var[n, t]) for t in abs_subhorizon] for n in UBus))
+                    push!(results["unserved_demand"], Dict(n => [value(unserved_demand[n, t]) for t in abs_subhorizon] for n in UBus))
+                    push!(results["Fixed_Cost"], fixed_cost_sub)
+                    push!(results["Startup_Cost"], startup_cost_sub)
+                    push!(results["Shutdown_Cost"], shutdown_cost_sub)
+                    push!(results["Variable_Cost"], variable_cost_sub)
+                    push!(results["Curtailment_Cost"], curtailment_cost_sub)
  
-                    # Store all decision variables for this subhorizon
+                    # # Store all decision variables for this subhorizon
                     sub_df = store_subhorizon_variables(model, sub, subhorizon, abs_subhorizon)
-                    append!(all_vars_df, sub_df)
+
+                    # Pivot the subhorizon DataFrame
+                    sub_pivoted_df = unstack(sub_df, :Time, :VarIndex, :Value, combine=first, fill=0.0)
+                    sort!(sub_pivoted_df, :Time)
+
+                    # Ensure all time steps in abs_subhorizon are present
+                    expected_times = DataFrame(Time=collect(abs_subhorizon))
+                    sub_pivoted_df = leftjoin(expected_times, sub_pivoted_df, on=:Time)
+                    for col in names(sub_pivoted_df)
+                        if eltype(sub_pivoted_df[!, col]) <: Union{Missing, Float64}
+                            sub_pivoted_df[!, col] = coalesce.(sub_pivoted_df[!, col], 0.0)
+                        end
+                    end
+
+                    # Append to all_vars_df, ensuring consistent columns
+                    if isempty(all_vars_df)
+                        all_vars_df = sub_pivoted_df
+                    else
+                        # Ensure all columns from sub_pivoted_df are in all_vars_df
+                        for col in names(sub_pivoted_df)
+                            if col ∉ names(all_vars_df) && col != "Time"
+                                all_vars_df[!, col] = zeros(Float64, nrow(all_vars_df))
+                            end
+                        end
+                        # Ensure all columns from all_vars_df are in sub_pivoted_df
+                        for col in names(all_vars_df)
+                            if col ∉ names(sub_pivoted_df) && col != "Time"
+                                sub_pivoted_df[!, col] = zeros(Float64, nrow(sub_pivoted_df))
+                            end
+                        end
+                        # Reorder columns in sub_pivoted_df to match all_vars_df
+                        if !isempty(names(all_vars_df))
+                            sub_pivoted_df = select(sub_pivoted_df, names(all_vars_df))
+                        end
+                        # Append vertically
+                        append!(all_vars_df, sub_pivoted_df)
+                    end
 
                     # Update prev_ variables
                     for g in UGen
@@ -505,13 +627,36 @@ function main()
                     break
                 end
             end
-            
-            println("\nTotal Optimal Cost over $D days ($T hours) = \$ $(round(total_cost, digits=2))")
-            println("Performance Metrics:")
-            println(" Total Solver Time: ", round(solver_time, digits=2), " seconds")
-            println(" Solver Iterations (Simplex): ", solver_iterations)
-            println(" Solver Nodes Explored (MIP): ", solver_nodes)
 
+            csmDemand_tot = Dict(t => sum(csmDemand[(n, t)] for n in UBus) for t in 1:T)
+            sorted_times = sort(collect(keys(csmDemand_tot)))
+
+            # Convert dictionary values to array (in sorted order)
+    
+            p_csmDemand = [csmDemand_tot[t] for t in sorted_times]
+            p_sysDemand = (p_csmDemand * (1 + Loss_factor)) # total demand
+            p_sysDemand_max = Int(round(maximum(p_sysDemand), digits=0))
+
+            # System metrics
+            println("\nSystem Summary:")
+            println(" Model: $ModelFile")
+            println(" Planning Horizon: $D days ($T hours) from $selected_year-$selected_month-$selected_day")
+            println(" Rolling Horizon: $H days") 
+            println(" Installed Generation Capacity (MW): $gen_capacity")
+            println(" System Peak Demand (MW): $p_sysDemand_max")
+            println(" Capacity Margin (%): $(round((gen_capacity - p_sysDemand_max) / gen_capacity * 100, digits=2))")
+            println(" Total Curtailment (MWh) = $(round(total_curtailment, digits=0))")
+            println(" Total Unserved Demand (MWh) = $(round(total_unserved_demand, digits=0))")
+
+            println("\nCost Summary:")
+            println(" Total Fixed Cost (\$): $(round(total_fixed_cost, digits=2))")
+            println(" Total Startup Cost (\$): $(round(total_startup_cost, digits=2))")
+            println(" Total Shutdown Cost (\$): $(round(total_shutdown_cost, digits=2))")
+            println(" Total Variable Cost (\$): $(round(total_variable_cost, digits=2))")
+            println(" Total Curtailment Cost (\$): $(round(total_curtailment_cost, digits=2))")
+            println(" Total Unserved Demand Cost (\$): $(round(total_unserved_demand_cost, digits=2))")
+            println(" Total Cost (\$): $(round(total_cost, digits=2))")
+            
            # Storing of solution
             @info "Storing solution..."
             local base_output_filename = "solution"  # Hardcode the filename
@@ -525,6 +670,9 @@ function main()
                 output_path = joinpath(RESULTS_DIR, "$(base_output_filename)_$(counter)$(output_ext)")
                 counter += 1
             end
+
+            # Sort all_vars_df by Time for consistency
+            sort!(all_vars_df, :Time)
 
             # Save solution to CSV with confirmation
             CSV.write(output_path, all_vars_df)

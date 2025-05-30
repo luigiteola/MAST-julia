@@ -17,8 +17,10 @@ end
 
 # Initialize arrays for global timeline (1:T)
 v_pwr_gen = Dict(g => zeros(Float64, T) for g in UGen)
+v_pwr_curtailed = Dict(g => zeros(Float64, T) for g in GenT2)
 v_batc = Dict(s => zeros(Float64, T) for s in UStorage)
 v_batd = Dict(s => zeros(Float64, T) for s in UStorage)
+v_unserved = Dict(n => zeros(Float64, T) for n in UBus)
 
 # Map results to global timeline using abs_subhorizon
 for sub in 1:N_subhorizons
@@ -33,23 +35,25 @@ for sub in 1:N_subhorizons
         for g in UGen
             v_pwr_gen[g][t] = results["Pwr_Gen_var"][sub][g][i]
         end
+        for g in GenT2
+            v_pwr_curtailed[g][t] = results["Pwr_curtailed"][sub][g][i]
+        end
         for s in UStorage
             v_batc[s][t] = -1 * results["P_chrg"][sub][s][i]
             v_batd[s][t] = results["P_dischrg"][sub][s][i]
+        end
+        for n in UBus
+            v_unserved[n][t] = results["unserved_demand"][sub][n][i]
         end
     end
 end
 
 # Get demand and solar generation
-psm_pv = Dict(t => sum(Rooftop_solar_trace_DR[(n, t)] for n in UBus) for t in 1:T)
 csmDemand_tot = Dict(t => sum(csmDemand[(n, t)] for n in UBus) for t in 1:T)
-psmDemand_tot = Dict(t => sum(psmDemand[(n, t)] for n in UBus) for t in 1:T)
 sorted_times = sort(collect(keys(csmDemand_tot)))
 
-p_psm_pv = [psm_pv[t] for t in sorted_times] # Convert dictionary values to array (in sorted order)
 p_csmDemand = [csmDemand_tot[t] for t in sorted_times]
-p_psmDemand = [psmDemand_tot[t] for t in sorted_times]
-p_sysDemand = ((p_csmDemand ) * (1 + Loss_factor)) .+ p_psmDemand
+p_sysDemand = (p_csmDemand)*(1 + Loss_factor)
 p_sysDemand_max = Int(round(maximum(p_sysDemand), digits=0))
 
 
@@ -63,10 +67,12 @@ p_wnd = zeros(Float64, T)
 p_geo = zeros(Float64, T)
 p_batc = zeros(Float64, T)
 p_batd = zeros(Float64, T)
+p_unserved = zeros(Float64, T)
 
 for t in 1:T
     p_batc[t] = sum(v_batc[s][t] for s in UStorage if haskey(v_batc, s); init=0.0)
     p_batd[t] = sum(v_batd[s][t] for s in UStorage if haskey(v_batd, s); init=0.0)
+    p_unserved[t] = sum(v_unserved[n][t] for n in UBus if haskey(v_unserved, n); init=0.0)
 end
 
 
@@ -88,16 +94,16 @@ for (gen_name, tech) in Gen_Tech_links
     end
 end
 
-tech_data = [p_blc p_brc p_hyd p_wnd p_sol p_batd p_psm_pv p_gas]
-tech_labels = ["BlackCoal" "BrownCoal" "Hydro" "Wind" "UtilitySolar" "UtilityStorage" "ProsumerSolar" "Gas"]
-tech_colors = [:black :brown :lightblue :green :orange :purple :yellow :cyan]
+tech_data = [p_blc p_brc p_hyd p_wnd p_sol p_batd p_gas p_unserved]
+tech_labels = ["BlackCoal" "BrownCoal" "Hydro" "Wind" "UtilitySolar" "UtilityStorage" "Gas" "UnservedDemand"]
+tech_colors = [:black :brown :lightblue :green :orange :purple :cyan :gray]
 
 p = areaplot(1:T,
     tech_data,
     label=tech_labels, 
     stack=:stack,
     fillcolor=tech_colors,
-    title="$(splitext(ModelFile)[1]) $(selected_year) $(network_detail) model \nPeak Demand: $(p_sysDemand_max) MW | Optimal Cost: $(round(total_cost/1e6, digits=2)) M",
+    # title="$(splitext(ModelFile)[1]) $(selected_year) $(network_detail) model \nPeak Demand: $(p_sysDemand_max) MW | Optimal Cost: $(round(total_cost/1e6, digits=2)) M",
     titlefont=(12, "Helvetica", :black),
     xlabel="Hours", 
     ylabel="Power (MW)",

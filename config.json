@@ -1,22 +1,25 @@
 {
   "data_directory": "models",
-  "model_file": "test.xlsx",
-  "demand_directory": "ESOO_2013_Load_Traces",
-  "solar_directory": "Solar_Trace",
-  "wind_directory": "0910_Wind_Traces",
+  "model_file": "NEM_14gen_59bus.xlsx",
+  "demand_directory": "Demand Traces Hourly Resolution",
+  "solar_directory": "Solar Traces Hourly Resolution",
+  "wind_directory": "Wind Traces Hourly Resolution",
   "trace": {
-    "year": 2020,
+    "year": 2023,
     "month": 7,
     "day": 1
   },
   "planning": {
-    "horizon_days": 7,
+    "horizon_days": 5,
     "rolling_horizon_days": 3,
-    "overlap_days": 1
+    "overlap_days": 1,
+    "voll": 10000,
+    "curtailment_penalty": 10000
   },
   "network_model": "Nodal",
   "loss_factor": 0.1,
   "reserve_margin": 0.1,
   "solver_name": "Gurobi",
-  "mipgap": 0.01
+  "mipgap": 0.01,
+  "plot_horizon_days": 3
 }
