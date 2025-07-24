@@ -1,6 +1,8 @@
 This is a Market Simulation Tool (MAST) coded in the Julia Programming Language.
-See MAST_Julia_guide_v1.0.pdf for installation and initialization instructions.
+See MAST_Julia_guide_v2.0.pdf for installation and initialization instructions.
 
+
+Updated and uploaded MAST_Julia_guide_v2.0
 
 Added functionality for v1.4:
 
