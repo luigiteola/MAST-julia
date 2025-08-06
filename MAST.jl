@@ -83,7 +83,7 @@ function load_config(config_path::String)
             "solar_directory" => "Solar_Trace",
             "wind_directory" => "0910_Wind_Traces",
             "trace" => Dict("year" => 2020, "month" => 7, "day" => 1),
-            "planning" => Dict("horizon_days" => 3, "rolling_horizon_days" => 2, "overlap_days" => 1, "voll" => 10000, "curtailment_penalty" => 10000),
+            "planning" => Dict("horizon_days" => 3, "rolling_horizon_days" => 2, "overlap_days" => 1, "voll" => 18600, "curtailment_penalty" => 600),
             "network_model" => "Nodal",
             "loss_factor" => 0.1,
             "reserve_margin" => 0.1,
@@ -431,8 +431,9 @@ function main()
                 end
 
                 # Resource availability constraint for Type 2 generators (Wind and Solar)
-                @constraint(model,u_Resource_availability_T2[g in GenT2, t in subhorizon], Pwr_Gen_var[g, t] + Pwr_curtailed[g, t] == Status_var[g, t] * Resource_trace_T2[(g, t)])
-                @constraint(model,u_G_T2_min_pwr[g in GenT2, t in subhorizon], Status_var[g, t] * Generator_data_dic[g]["Minimum_Real_Power"] <= Pwr_Gen_var[g, t])
+                @constraint(model,u_Resource_availability_T2[g in GenT2, t in subhorizon], Pwr_Gen_var[g, t] + Pwr_curtailed[g, t] == Resource_trace_T2[(g, t)])
+                @constraint(model,u_G_T2_min_pwr[g in GenT2, t in subhorizon], Generator_data_dic[g]["Minimum_Real_Power"] <= Pwr_Gen_var[g, t])
+                @constraint(model, [g in GenT2, t in subhorizon], Pwr_curtailed[g,t] <= Pwr_Gen_var[g,t])
 
                 # Transmission constraints
 
@@ -476,10 +477,10 @@ function main()
 
                 @constraint(model, u_Balance[n in UBus, t in subhorizon],
                     sum(Pwr_Gen_var[g, t] for (g, nb) in GenT1_Bus_links if nb == n) +
-                    sum(Pwr_Gen_var[g, t] - Pwr_curtailed[g, t] for (g, nb) in GenT2_Bus_links if nb == n) +
+                    sum(Pwr_Gen_var[g, t] for (g, nb) in GenT2_Bus_links if nb == n) +
                     sum(Pwr_line_var[l2, t] for (l2, nb) in Line_end2_Bus_links if nb == n) +
                     sum(P_dischrg[s, t] for (s, nb) in Storage_Bus_links if nb == n) +
-                    (unserved_demand[n,t] * (1 + Loss_factor))
+                    unserved_demand[n,t]
                     ==
                     csmDemand[n,t] * (1 + Loss_factor) +
                     sum(Pwr_line_var[l1, t] for (l1, nb) in Line_end1_Bus_links if nb == n) +

@@ -13,8 +13,8 @@
     "horizon_days": 5,
     "rolling_horizon_days": 3,
     "overlap_days": 1,
-    "voll": 10000,
-    "curtailment_penalty": 10000
+    "voll": 18600,
+    "curtailment_penalty": 600
   },
   "network_model": "Nodal",
   "loss_factor": 0.1,
