@@ -433,7 +433,7 @@ function main()
                 # Resource availability constraint for Type 2 generators (Wind and Solar)
                 @constraint(model,u_Resource_availability_T2[g in GenT2, t in subhorizon], Pwr_Gen_var[g, t] + Pwr_curtailed[g, t] == Resource_trace_T2[(g, t)])
                 @constraint(model,u_G_T2_min_pwr[g in GenT2, t in subhorizon], Generator_data_dic[g]["Minimum_Real_Power"] <= Pwr_Gen_var[g, t])
-                @constraint(model, [g in GenT2, t in subhorizon], Pwr_curtailed[g,t] <= Pwr_Gen_var[g,t])
+                @constraint(model, [g in GenT2, t in subhorizon], Pwr_curtailed[g,t] <= Resource_trace_T2[(g, t)])
 
                 # Transmission constraints
 
