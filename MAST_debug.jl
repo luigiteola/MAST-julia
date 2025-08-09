@@ -57,7 +57,7 @@ end
 # Install packages if missing
 install_required_packages(required_packages)
 
-using CSV, DataFrames, DataFramesMeta, JuMP, Gurobi, Plots, VegaLite, XLSX, JSON, Logging, ArgParse
+using CSV, DataFrames, DataFramesMeta, JuMP, Gurobi, Plots, VegaLite, XLSX, JSON, Logging, ArgParse, Measures, Plots
 
 
 # Load config file with fallback
