@@ -418,12 +418,19 @@ if network_model in Cu_plate
     println("Number of buses: ", N)
 
     # Map all generators to the single "System" bus
-    global Gen_Bus_links = Set()
-    for value in UGen
-        push!(Gen_Bus_links, (value, "System"))
+    global GenT1_Bus_links = Set()
+    for value in GenT1
+        push!(GenT1_Bus_links, (value, "System"))
         println("Mapped generator $value to system bus")
     end
-    println("Gen_Bus_links for copper plate: ", Gen_Bus_links)
+    # println("GenT1_Bus_links for Cu_plate: ", GenT1_Bus_links)
+
+    global GenT2_Bus_links = Set()
+    for value in GenT2
+        push!(GenT2_Bus_links, (value, "System"))
+        println("Mapped generator $value to system bus")
+    end
+    # println("GenT2_Bus_links for Cu_plate: ", GenT2_Bus_links)
 
     # Map all storage to the single "System" bus
     global Storage_Bus_links = Set()
@@ -431,7 +438,7 @@ if network_model in Cu_plate
         push!(Storage_Bus_links, (value, "System"))
         println("Mapped storage $value to system bus")
     end
-    println("Storage_Bus_links for copper plate: ", Storage_Bus_links)
+    # println("Storage_Bus_links for copper plate: ", Storage_Bus_links)
 
     # No transmission lines in copper plate
     global ULine = Set{String}()  # Empty set
@@ -439,12 +446,14 @@ if network_model in Cu_plate
     global Line_end1_Bus_links = Dict{String,String}()
     global Line_end2_Bus_links = Dict{String,String}()
     global Bus_Region_links = Set((b, "System") for b in UBus)
-    global GenT1_Region_links = Set((g, "System") for g in GenT1 for gb in Gen_Bus_links if gb[1] == g)
+    global GenT1_Region_links = Set((g, "System") for g in GenT1 for gb in GenT1_Bus_links if gb[1] == g)
+    global GenT2_Region_links = Set((g, "System") for g in GenT2 for gb in GenT2_Bus_links if gb[1] == g)
     println("Redefined ULine as empty for copper plate: ", ULine)
     println("Line_end1_Bus_links: ", Line_end1_Bus_links)
     println("Line_end2_Bus_links: ", Line_end2_Bus_links)
     println("Bus_Region_links: ", Bus_Region_links)
     println("GenT1_Region_links: ", GenT1_Region_links)
+    println("GenT2_Region_links: ", GenT2_Region_links)
     println("Existing lines: ", existing_lines)
 
     global psm_batt_eff["System"] = maximum(psm_batt_eff[b] for b in UBus_orig if haskey(psm_batt_eff, b); init=0.0)
@@ -465,14 +474,24 @@ elseif network_model in Regional
     println("Number of regions: ", N)
 
     # Map generators to regions
-    global Gen_Bus_links = Set()
-    for value in UGen
+    global GenT1_Bus_links = Set()
+    for value in GenT1
         bus = Generator_data_dic[value]["Location_Bus"]
         region = Bus_data_dic[bus]["Bus_Region"]
-        push!(Gen_Bus_links, (value, region))
+        push!(GenT1_Bus_links, (value, region))
         println("Mapped generator $value from bus $bus to region $region")
     end
-    println("Gen_Bus_links for Regional: ", Gen_Bus_links)
+    # println("GenT1_Bus_links for Regional: ", GenT1_Bus_links)
+
+    global GenT2_Bus_links = Set()
+    for value in GenT2
+        bus = Generator_data_dic[value]["Location_Bus"]
+        region = Bus_data_dic[bus]["Bus_Region"]
+        push!(GenT2_Bus_links, (value, region))
+        println("Mapped generator $value from bus $bus to region $region")
+    end
+    # println("GenT2_Bus_links for Regional: ", GenT2_Bus_links)
+
 
     # Map storage to regions
     global Storage_Bus_links = Set()
@@ -482,7 +501,7 @@ elseif network_model in Regional
         push!(Storage_Bus_links, (value, region))
         println("Mapped storage $value from bus $bus to region $region")
     end
-    println("Storage_Bus_links for Regional: ", Storage_Bus_links)
+    # println("Storage_Bus_links for Regional: ", Storage_Bus_links)
     
     global Bus_Region_links = Set{String}() # empty set
 
