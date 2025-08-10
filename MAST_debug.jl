@@ -293,6 +293,10 @@ function main()
                 elseif solver_name == "Gurobi"
                     model = Model(Gurobi.Optimizer)
                     set_optimizer_attribute(model, "MIPGap", mipgap)
+                    set_optimizer_attribute(model, "TuneTrials", 3) # Tuning of solver parameters
+                    set_optimizer_attribute(model, "TuneTimeLimit", 3600) # Tuning of solver parameters
+                    set_optimizer_attribute(model, "TuneOutput", 1) # Tuning of solver parameters
+                    set_optimizer_attribute(model, "TuneResults", 1) # Tuning of solver parameters
                 elseif solver_name == "CPLEX"
                     model = Model(CPLEX.Optimizer)
                     set_optimizer_attribute(model, "mipgap", mipgap)
@@ -323,7 +327,7 @@ function main()
                 # Other decision variables
                 @variable(model, unserved_demand[UBus, subhorizon] >= 0) # Unserved demand for each bus in the subhorizon
                 @variable(model, Pwr_curtailed[g in GenT2, t in subhorizon] >= 0) # Power curtailed for each Type 2 generator in the subhorizon
-                @constraint(model, [n in UBus, t in subhorizon], unserved_demand[n, t] <= csmDemand[n, t]) # Unserved demand constraint
+                @constraint(model, [n in UBus, t in subhorizon], unserved_demand[n, t] <= csmDemand[n, t] * (1 + Loss_factor)) # Unserved demand constraint
                 @constraint(model, [s in UStorage, t in subhorizon], sum(unserved_demand[n, t] for n in UBus) <= M0 * (1 - U_bin[s, t])) # Unserved demand constraint for storage
 
                 # Constraints
