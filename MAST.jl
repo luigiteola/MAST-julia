@@ -311,10 +311,9 @@ function main()
                 elseif solver_name == "Gurobi"
                     model = Model(Gurobi.Optimizer)
                     set_optimizer_attribute(model, "MIPGap", mipgap)
-                    set_optimizer_attribute(model, "TuneTrials", 3) # Tuning of solver parameters
-                    set_optimizer_attribute(model, "TuneTimeLimit", 3600) # Tuning of solver parameters
-                    set_optimizer_attribute(model, "TuneOutput", 1) # Tuning of solver parameters
-                    set_optimizer_attribute(model, "TuneResults", 1) # Tuning of solver parameters
+                    set_optimizer_attribute(model, "Threads", min(8, Sys.CPU_THREADS))
+                    set_optimizer_attribute(model, "OutputFlag", 1)
+                    
                 elseif solver_name == "CPLEX"
                     model = Model(CPLEX.Optimizer)
                     set_optimizer_attribute(model, "mipgap", mipgap)
@@ -322,7 +321,6 @@ function main()
                     error("Unsupported solver: $solver_name")
                 end
 
-                set_silent(model)
 
                 M0 = 1e6 # Large constant
 
@@ -437,7 +435,6 @@ function main()
                 # Resource availability constraint for Type 2 generators (Wind and Solar)
                 @constraint(model,u_Resource_availability_T2[g in GenT2, t in subhorizon], Pwr_Gen_var[g, t] + Pwr_curtailed[g, t] == Resource_trace_T2[(g, t)])
                 @constraint(model,u_G_T2_min_pwr[g in GenT2, t in subhorizon], Generator_data_dic[g]["Minimum_Real_Power"] <= Pwr_Gen_var[g, t])
-                @constraint(model, [g in GenT2, t in subhorizon], Pwr_curtailed[g,t] <= Resource_trace_T2[(g, t)])
 
                 # Transmission constraints
 

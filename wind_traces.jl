@@ -96,21 +96,17 @@ for (index, bus_name) in enumerate(UBus_orig)
                 continue
             end
 
-            # Fetch the appropriate wind trace and scale by maximum real power for all planning days
-            for day in 0:D-1
+             # Fetch the appropriate wind trace for each bus
+             for day in 0:D-1
                 row = start_idx + day
                 start_col = 4
                 end_col = 27
 
                 Wind_temp = Vector(wind_df[row, start_col:end_col])
-                println("Wind trace for ", Wind_trace_name, " before scaling: ", Wind_temp)
-                println("Maximum real power for generator ", gen_name, ": ", max_real_power)
-                Wind_temp = Wind_temp * max_real_power
-                println("Wind trace for ", Wind_trace_name, " after scaling: ", Wind_temp)
-
-                # Store the wind trace data for this bus for the corresponding day
+                println("Wind trace for ", Wind_trace_name, ": ", Wind_temp)
                 Wind_trace_DR_Matrix[index, day*24+1:(day+1)*24] = Wind_temp
             end
+
         else
             Wind_trace_DR_Matrix[index, :] = zeros(T)  # No wind generator found, set to zero for all planning days
             println("No wind generator found for bus ", bus_name)

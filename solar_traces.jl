@@ -101,21 +101,19 @@ for (index, bus_name) in enumerate(UBus_orig)
                 continue
             end
 
-            # Fetch the appropriate solar trace and scale by maximum real power for 7 days
+            # Fetch the appropriate solar trace for each bus
             for day in 0:D-1
                 row = start_idx + day
                 start_col = 4
                 end_col = 27
 
                 PV_temp = Vector(solar_df[row, start_col:end_col])
-                println("Solar trace for ", PV_trace_name, " before scaling: ", PV_temp)
-                println("Maximum real power for generator ", gen_name, ": ", max_real_power)
-                PV_temp = PV_temp * max_real_power
-                println("Solar trace for ", PV_trace_name, " after scaling: ", PV_temp)
+                println("Solar trace for ", PV_trace_name, ": ", PV_temp)
 
                 # Store the solar trace data for this bus for the 24 hours of the corresponding day
                 Solar_trace_DR_Matrix[index, day*24+1:(day+1)*24] = PV_temp
             end
+
         else
             Solar_trace_DR_Matrix[index, :] = zeros(T)  # No solar generator found, set to zero for all planning days
             println("No solar generator found for bus ", bus_name)
@@ -229,10 +227,10 @@ for (index, bus_name) in enumerate(UBus_orig)
             end_col = 27
 
             rooftop_PV_temp = Vector(rooftop_solar_df[row, start_col:end_col])
-            println("Rooftop solar trace for ", Rooftop_PV_trace_name, " before scaling: ", rooftop_PV_temp)
-            println("Maximum real power for rooftop solar at bus ", bus_name, ": ", rooftop_pv_max_real_power)
+            println("Rooftop solar trace for ", Rooftop_PV_trace_name, ": ", rooftop_PV_temp)
+            println("Rooftop solar capacity at bus ", bus_name, ": ", rooftop_pv_max_real_power)
             rooftop_PV_temp = rooftop_PV_temp * rooftop_pv_max_real_power
-            println("Rooftop solar trace for ", Rooftop_PV_trace_name, " after scaling: ", rooftop_PV_temp)
+            println("Rooftop solar trace for ", bus_name, ": ", rooftop_PV_temp)
 
             # Store the solar trace data for this bus for the 24 hours of the corresponding day
             Rooftop_solar_trace_DR_Matrix[index, day*24+1:(day+1)*24] = rooftop_PV_temp
