@@ -594,9 +594,9 @@ function main()
 
                     # Update prev_ variables
                     for g in UGen
-                        prev_Status_var[g] = value(Status_var[g, t_end])
-                        prev_S_Up_var[g] = value(S_Up_var[g, t_end])  # Update previous startup
-                        prev_S_Down_var[g] = value(S_Down_var[g, t_end])  # Update previous shutdown
+                        prev_Status_var[g] = round(Int, value(Status_var[g, t_end]))  # Rounding to make up for numerical issues
+                        prev_S_Up_var[g] = round(Int, value(S_Up_var[g, t_end]))    # Rounding to make up for numerical issues
+                        prev_S_Down_var[g] = round(Int, value(S_Down_var[g, t_end])) # Rounding to make up for numerical issues
                         if g in GenT1
                             prev_Pwr_Gen_var[g] = value(Pwr_Gen_var[g, t_end])
                         end

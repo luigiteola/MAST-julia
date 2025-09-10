@@ -313,6 +313,7 @@ function main()
                     set_optimizer_attribute(model, "MIPGap", mipgap)
                     set_optimizer_attribute(model, "Threads", min(8, Sys.CPU_THREADS))
                     set_optimizer_attribute(model, "OutputFlag", 1)
+                    set_optimizer_attribute(model, "IISMethod", 1) # method to compute IIS
                     
                 elseif solver_name == "CPLEX"
                     model = Model(CPLEX.Optimizer)
@@ -611,9 +612,9 @@ function main()
 
                     # Update prev_ variables
                     for g in UGen
-                        prev_Status_var[g] = value(Status_var[g, t_end])
-                        prev_S_Up_var[g] = value(S_Up_var[g, t_end])  # Update previous startup
-                        prev_S_Down_var[g] = value(S_Down_var[g, t_end])  # Update previous shutdown
+                        prev_Status_var[g] = round(Int, value(Status_var[g, t_end]))  # Rounding to make up for numerical issues
+                        prev_S_Up_var[g] = round(Int, value(S_Up_var[g, t_end]))    # Rounding to make up for numerical issues
+                        prev_S_Down_var[g] = round(Int, value(S_Down_var[g, t_end])) # Rounding to make up for numerical issues
                         if g in GenT1
                             prev_Pwr_Gen_var[g] = value(Pwr_Gen_var[g, t_end])
                         end
@@ -625,7 +626,17 @@ function main()
                     println("Sub-horizon $sub failed to solve optimally. Status: ", termination_status(model))
                     println("Primal Status: ", primal_status(model))
                     println("Dual Status: ", dual_status(model))
-                    error("Optimization failed for Sub-horizon $sub")
+                    println("Optimization failed for Sub-horizon $sub")
+
+                    compute_conflict!(model)
+
+                    # Print conflicting constraints and variables
+                    println("Conflicting constraints and variables:")
+                    for c in all_constraints(model; include_variable_in_set_constraints=true)
+                        if MOI.get(model, MOI.ConstraintConflictStatus(), c) != MOI.NOT_IN_CONFLICT
+                            println("Conflicting constraint: $c")
+                        end
+                    end
                     break
                 end
             end
